@@ -5,9 +5,25 @@ import traceback
 from django_cron.models import CronJobLog
 
 
-class Schedule(object):
+class BaseSchedule(object):
+    """
+    Sub classes should have the following methods:
+    + should_run_now(self, cron_job) - return True if the cron job should run based on the schedule. False otherwise.
+    """
+    pass
+    
+class Schedule(BaseSchedule):
     def __init__(self, run_every_mins=60):
         self.run_every_mins = run_every_mins
+        
+    def should_run_now(self, cron_job):
+        qset = CronJobLog.objects.filter(code=cron_job.code, is_success=True).order_by('-start_time')
+        if qset:
+            previously_ran_successful_cron = qset[0]
+            if datetime.now() < previously_ran_successful_cron.start_time + timedelta(minutes=self.run_every_mins):
+                return False
+    
+        return True
 
 class CronJobBase(object):
     """
@@ -30,13 +46,7 @@ class CronJobManager(object):
         """
         Returns a boolean determining whether this cron should run now or not!
         """
-        qset = CronJobLog.objects.filter(code=cron_job.code, is_success=True).order_by('-start_time')
-        if qset:
-            previously_ran_successful_cron = qset[0]
-            if datetime.now() < previously_ran_successful_cron.start_time + timedelta(minutes=cron_job.schedule.run_every_mins):
-                return False
-    
-        return True
+        return cron_job.schedule.should_run_now(cron_job)
     
     @classmethod
     def run(self, cron_job):
