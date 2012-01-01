@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 import traceback
 
-from django_cron.models import CronJobLog
+from django_cron.models import CronJobLog, CronTimer
 
 
 class BaseSchedule(object):
@@ -25,6 +25,35 @@ class Schedule(BaseSchedule):
     
         return True
 
+class DeferedCronSchedule(BaseSchedule):
+    def __init__(self, run_every_mins=60):
+        self.run_every_mins = run_every_mins
+    
+    def should_run_now(self, cron_job):
+        timer, created = CronTimer.objects.get_or_create(code=cron_job.code)
+        if created:
+            # check log
+            qset = CronJobLog.objects.filter(code=cron_job.code, is_success=True).order_by('-start_time')
+            if qset:
+                previously_ran_successful_cron = qset[0]
+                timer.next_run_time = previously_ran_successful_cron.start_time + timedelta(minutes=self.run_every_mins)
+            else:
+                timer.next_run_time = datetime.now()
+            timer.save()
+        
+        if datetime.now() > timer.next_run_time:
+            return True
+        
+        return False
+        
+    def defer(self, cron_job):
+        """
+        Defers the cron job to not run for self.run_every_mins from now.  Resets the timer.
+        """
+        timer, created = CronTimer.objects.get_or_create(code=cron_job.code)
+        timer.next_run_time = datetime.now() + timedelta(minutes=self.run_every_mins)
+        timer.save()
+        
 class CronJobBase(object):
     """
     Sub-classes should have the following properties:
