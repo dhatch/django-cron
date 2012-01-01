@@ -34,21 +34,20 @@ class DeferedCronSchedule(BaseSchedule):
         if created:
             # check log
             qset = CronJobLog.objects.filter(code=cron_job.code, is_success=True).order_by('-start_time')
-            if qset:
-                previously_ran_successful_cron = qset[0]
-                timer.next_run_time = previously_ran_successful_cron.start_time + timedelta(minutes=self.run_every_mins)
-            else:
+            if not qset.exists():
                 timer.next_run_time = datetime.now()
             timer.save()
         
-        if datetime.now() > timer.next_run_time:
+        if timer.next_run_time and datetime.now() > timer.next_run_time:
+            timer.next_run_time = None
+            timer.save()
             return True
         
         return False
         
     def defer(self, cron_job):
         """
-        Defers the cron job to not run for self.run_every_mins from now.  Resets the timer.
+        Defers the cron job to run self.run_every_mins from now.  Resets the timer.
         """
         timer, created = CronTimer.objects.get_or_create(code=cron_job.code)
         timer.next_run_time = datetime.now() + timedelta(minutes=self.run_every_mins)
