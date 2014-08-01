@@ -21,3 +21,11 @@ class CronJobLog(models.Model):
 
     def __unicode__(self):
         return '%s (%s)' % (self.code, 'Success' if self.is_success else 'Fail')
+
+class CronTimer(models.Model):
+    """
+    Keep track of cron run time for DeferedCronSchedule
+    """
+    
+    code = models.CharField(max_length=64, db_index=True, unique=True)
+    next_run_time = models.DateTimeField(blank=True, null=True)

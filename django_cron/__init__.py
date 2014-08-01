@@ -3,7 +3,7 @@ from datetime import timedelta, datetime
 import traceback
 import time
 
-from django_cron.models import CronJobLog
+from django_cron.models import CronJobLog, CronTimer
 
 try:
     from django.utils import timezone
@@ -18,6 +18,34 @@ class Schedule(object):
         self.run_at_times = run_at_times
         self.retry_after_failure_mins = retry_after_failure_mins
 
+
+class DeferedCronSchedule(object):
+    def __init__(self, run_every_mins=60):
+        self.run_every_mins = run_every_mins
+
+    def should_run_now(self, cron_job):
+        timer, created = CronTimer.objects.get_or_create(code=cron_job.code)
+        if created:
+            # check log
+            qset = CronJobLog.objects.filter(code=cron_job.code, is_success=True).order_by('-start_time')
+            if not qset.exists():
+                timer.next_run_time = datetime.now()
+            timer.save()
+
+        if timer.next_run_time and datetime.now() > timer.next_run_time:
+            timer.next_run_time = None
+            timer.save()
+            return True
+
+        return False
+
+    def defer(self, cron_job):
+        """
+        Defers the cron job to run self.run_every_mins from now.  Resets the timer.
+        """
+        timer, created = CronTimer.objects.get_or_create(code=cron_job.code)
+        timer.next_run_time = datetime.now() + timedelta(minutes=self.run_every_mins)
+        timer.save()
 
 class CronJobBase(object):
     """
@@ -41,10 +69,15 @@ class CronJobManager(object):
         """
         Returns a boolean determining whether this cron should run now or not!
         """
+
         # If we pass --force options, we force cron run
         self.user_time = None
         if force:
             return True
+
+        if isinstance(cron_job.schedule, DeferedCronSchedule):
+            return cron_job.schedule.should_run_now(cron_job)
+
         if cron_job.schedule.run_every_mins != None:
 
             # We check last job - success or not
