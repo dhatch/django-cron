@@ -7,7 +7,7 @@ class CronJobLog(models.Model):
     """
     Keeps track of the cron jobs that ran etc. and any error messages if they failed.
     """
-    code = models.CharField(max_length=64, db_index=True)
+    code = models.CharField(max_length=150, db_index=True)
     start_time = models.DateTimeField(db_index=True)
     end_time = models.DateTimeField()
     is_success = models.BooleanField(default=False)
@@ -26,6 +26,6 @@ class CronTimer(models.Model):
     """
     Keep track of cron run time for DeferedCronSchedule
     """
-    
-    code = models.CharField(max_length=64, db_index=True, unique=True)
+
+    code = models.CharField(max_length=150, db_index=True, unique=True)
     next_run_time = models.DateTimeField(blank=True, null=True)
